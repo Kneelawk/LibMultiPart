@@ -59,13 +59,9 @@ import alexiil.mc.lib.multipart.api.AbstractPart;
 import alexiil.mc.lib.multipart.api.MultipartContainer;
 import alexiil.mc.lib.multipart.api.MultipartEventBus;
 import alexiil.mc.lib.multipart.api.MultipartHolder;
-import alexiil.mc.lib.multipart.api.event.PartAddedEvent;
-import alexiil.mc.lib.multipart.api.event.PartContainerState;
-import alexiil.mc.lib.multipart.api.event.PartOfferedEvent;
-import alexiil.mc.lib.multipart.api.event.PartRedstonePowerEvent;
+import alexiil.mc.lib.multipart.api.event.*;
 import alexiil.mc.lib.multipart.api.event.PartRedstonePowerEvent.PartRedstonePowerEventFactory;
-import alexiil.mc.lib.multipart.api.event.PartRemovedEvent;
-import alexiil.mc.lib.multipart.api.event.PartTickEvent;
+import alexiil.mc.lib.multipart.api.misc.DirectionTransformationUtil;
 import alexiil.mc.lib.multipart.api.property.MultipartProperties;
 import alexiil.mc.lib.multipart.api.property.MultipartProperties.RedstonePowerProperty;
 import alexiil.mc.lib.multipart.api.property.MultipartProperties.StrongRedstonePowerProperty;
@@ -905,96 +901,79 @@ public class PartContainer implements MultipartContainer {
     }
 
     /** Checks if a transformation is valid for all parts in this container. */
-    boolean transformInvalid(DirectionTransformation transformation) {
-        for (PartHolder holder : parts) {
-            if (!holder.part.canTransform(transformation)) {
-                return true;
-            }
-        }
-
-        return false;
+    boolean isTransformInvalid(DirectionTransformation transformation) {
+        PartTransformCheckEvent event = new PartTransformCheckEvent(transformation);
+        eventBus.fireEvent(event);
+        return event.isInvalid();
     }
 
     void rotate(BlockRotation rotation) {
         DirectionTransformation transformation = rotation.getDirectionTransformation();
-        if (transformInvalid(transformation)) {
+        if (isTransformInvalid(transformation)) {
             return;
         }
 
-        callPreTransform();
+        eventBus.fireEvent(PartPreTransformEvent.INSTANCE);
         callRotate(rotation);
-        callTransform(transformation);
-        callPostTransform();
+        eventBus.fireEvent(PartTransformEvent.create(transformation));
+        transformRequiredParts(transformation);
+        eventBus.fireEvent(PartPostTransformEvent.INSTANCE);
     }
 
     private void callRotate(BlockRotation rotation) {
         for (PartHolder holder : parts) {
-            // This is always called in conjunction with #callTransform which performs the appropriate PosPartId
-            // transformations.
+            // Call the deprecated rotate method for backwards compatibility.
             holder.part.rotate(rotation);
         }
     }
 
     void mirror(BlockMirror mirror) {
         DirectionTransformation transformation = mirror.getDirectionTransformation();
-        if (transformInvalid(transformation)) {
+        if (isTransformInvalid(transformation)) {
             return;
         }
 
-        callPreTransform();
+        eventBus.fireEvent(PartPreTransformEvent.INSTANCE);
         callMirror(mirror);
-        callTransform(transformation);
-        callPostTransform();
+        eventBus.fireEvent(PartTransformEvent.create(transformation));
+        transformRequiredParts(transformation);
+        eventBus.fireEvent(PartPostTransformEvent.INSTANCE);
     }
 
     private void callMirror(BlockMirror mirror) {
         for (PartHolder holder : parts) {
-            // This is always called in conjunction with #callTransform which performs the appropriate PosPartId
-            // transformations.
+            // Call the deprecated mirror method for backwards compatibility.
             holder.part.mirror(mirror);
         }
     }
 
     void transform(DirectionTransformation transformation) {
-        if (transformInvalid(transformation)) {
+        if (isTransformInvalid(transformation)) {
             return;
         }
 
-        callPreTransform();
+        eventBus.fireEvent(PartPreTransformEvent.INSTANCE);
         tryCallSimplifiedTransform(transformation);
-        callTransform(transformation);
-        callPostTransform();
+        eventBus.fireEvent(PartTransformEvent.create(transformation));
+        transformRequiredParts(transformation);
+        eventBus.fireEvent(PartPostTransformEvent.INSTANCE);
     }
 
-    private void callTransform(DirectionTransformation transformation) {
+    private void transformRequiredParts(DirectionTransformation transformation) {
         for (PartHolder holder : parts) {
-            holder.transform(transformation);
-        }
-    }
-
-    private void callPreTransform() {
-        for (PartHolder holder : parts) {
-            holder.part.preTransform();
-        }
-    }
-
-    private void callPostTransform() {
-        for (PartHolder holder : parts) {
-            holder.part.postTransform();
+            holder.transformRequiredParts(transformation);
         }
     }
 
     private void tryCallSimplifiedTransform(DirectionTransformation transformation) {
-        switch (transformation) {
-            case ROT_90_Y_NEG -> callRotate(BlockRotation.CLOCKWISE_90);
-            case ROT_180_FACE_XZ -> callRotate(BlockRotation.CLOCKWISE_180);
-            case ROT_90_Y_POS -> callRotate(BlockRotation.COUNTERCLOCKWISE_90);
-            // Why is BlockMirror like this? I guess LEFT_RIGHT means mirroring across a line from left to right?
-            case INVERT_Z -> callMirror(BlockMirror.LEFT_RIGHT);
-            case INVERT_X -> callMirror(BlockMirror.FRONT_BACK);
-            default -> {
-                // Do nothing with un-handleable values.
-            }
+        BlockRotation rotation = DirectionTransformationUtil.getRotation(transformation);
+        if (rotation != null) {
+            callRotate(rotation);
+        }
+
+        BlockMirror mirror = DirectionTransformationUtil.getMirror(transformation);
+        if (mirror != null) {
+            callMirror(mirror);
         }
     }
 
@@ -1006,26 +985,21 @@ public class PartContainer implements MultipartContainer {
 
     private void updateTransform(DirectionTransformation stateTransform) {
         if (stateTransform != cachedTransformation) {
-            // A: cached transformation
-            // X: delta transformation prepended to blockstate while we weren't looking
-            // A^-1: A.inverse()
-            //
-            // Currently the blockstate holds a transformation 'XA' but we really only want to find X.
-            // To find X, we just prepend the blockstate's transformation to A^-1 to get: XAA^-1 = X.
-            DirectionTransformation deltaTransform = cachedTransformation.inverse().prepend(stateTransform);
+            DirectionTransformation deltaTransform = DirectionTransformationUtil.getRelativeTransformation(cachedTransformation, stateTransform);
             cachedTransformation = stateTransform;
 
             // The actual value of the blockstate transform is meaningless, only the difference between it and the
             // cached transform is used. This means we can just ignore invalid transformations without having to revert
             // the blockstate or anything.
-            if (transformInvalid(deltaTransform)) {
+            if (isTransformInvalid(deltaTransform)) {
                 return;
             }
 
-            callPreTransform();
+            eventBus.fireEvent(PartPreTransformEvent.INSTANCE);
             tryCallSimplifiedTransform(deltaTransform);
-            callTransform(deltaTransform);
-            callPostTransform();
+            eventBus.fireEvent(PartTransformEvent.create(deltaTransform));
+            transformRequiredParts(deltaTransform);
+            eventBus.fireEvent(PartPostTransformEvent.INSTANCE);
         }
     }
 
