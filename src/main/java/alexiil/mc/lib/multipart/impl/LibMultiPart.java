@@ -11,6 +11,8 @@ import java.lang.reflect.Method;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+import net.minecraft.block.entity.BlockEntity;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -75,6 +77,14 @@ public class LibMultiPart implements ModInitializer {
         register(Registry.BLOCK_ENTITY_TYPE, BLOCK_ENTITY, "container");
 
         MultipartBlockEntity.init();
+
+        ServerChunkEvents.CHUNK_UNLOAD.register((world, chunk) -> {
+            for (BlockEntity be : chunk.getBlockEntities().values()) {
+                if (be instanceof MultipartBlockEntity multipart) {
+                    multipart.onChunkUnload();
+                }
+            }
+        });
     }
 
     private static <T> void register(Registry<T> registry, T obj, String path) {

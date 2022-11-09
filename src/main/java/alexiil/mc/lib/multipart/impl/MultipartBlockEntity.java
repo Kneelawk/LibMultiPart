@@ -14,6 +14,8 @@ import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableList;
 
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.rendering.data.v1.RenderAttachmentBlockEntity;
 
 import net.minecraft.block.BlockState;
@@ -47,8 +49,7 @@ import alexiil.mc.lib.multipart.api.render.PartModelKey;
 import alexiil.mc.lib.multipart.impl.client.PartModelData;
 
 public class MultipartBlockEntity extends BlockEntity
-    implements UnloadableBlockEntity, RenderAttachmentBlockEntity, BlockEntityInitialData,
-    AttributeProviderBlockEntity {
+    implements RenderAttachmentBlockEntity, BlockEntityInitialData, AttributeProviderBlockEntity {
     static final ParentNetIdSingle<MultipartBlockEntity> NET_KEY;
 
     static {
@@ -126,7 +127,7 @@ public class MultipartBlockEntity extends BlockEntity
         container.invalidate();
     }
 
-    @Override
+    /** Called by {@link ServerChunkEvents#CHUNK_UNLOAD} and {@link ClientChunkEvents#CHUNK_UNLOAD} */
     public void onChunkUnload() {
         container.onChunkUnload();
     }

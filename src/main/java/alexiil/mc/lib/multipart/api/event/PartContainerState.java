@@ -7,6 +7,8 @@
  */
 package alexiil.mc.lib.multipart.api.event;
 
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
@@ -23,8 +25,8 @@ public abstract class PartContainerState extends MultipartEvent {
     /** Fired in {@link BlockEntity#cancelRemoval()} */
     public static final Validate VALIDATE = new Validate();
 
-    /** Fired in {@link UnloadableBlockEntity#onChunkUnload()}. In 1.17 this is fired before
-     * {@link PartContainerState.Invalidate}, which always follows this. */
+    /** Fired in {@link ServerChunkEvents#CHUNK_UNLOAD} and {@link ClientChunkEvents#CHUNK_UNLOAD}. In 1.17 this is
+     * fired before {@link PartContainerState.Invalidate}, which always follows this. */
     public static final ChunkUnload CHUNK_UNLOAD = new ChunkUnload();
 
     /** Fired in {@link Block#onStateReplaced(BlockState, World, BlockPos, BlockState, boolean)} */
@@ -42,8 +44,8 @@ public abstract class PartContainerState extends MultipartEvent {
         Validate() {}
     }
 
-    /** Fired in {@link UnloadableBlockEntity#onChunkUnload()}. In 1.17 this is fired before
-     * {@link PartContainerState.Invalidate}, which always follows this. */
+    /** Fired in {@link ServerChunkEvents#CHUNK_UNLOAD} and {@link ClientChunkEvents#CHUNK_UNLOAD}. In 1.17 this is
+     * fired before {@link PartContainerState.Invalidate}, which always follows this. */
     public static final class ChunkUnload extends PartContainerState implements ContextlessEvent {
         ChunkUnload() {}
     }
