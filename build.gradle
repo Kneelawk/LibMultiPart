@@ -16,6 +16,19 @@ repositories {
     if (wthit_enabled.toBoolean()) {
         maven { name="WTHIT"; url="https://maven.bai.lol" }
     }
+    if (jade_enabled.toBoolean() || polydex_enabled.toBoolean()) {
+        maven {
+            name = "Modrinth"
+            url = "https://api.modrinth.com/maven"
+            content {
+                includeGroup "maven.modrinth"
+            }
+        }
+    }
+    if (polydex_enabled.toBoolean()) {
+        maven { name="Nucleoid"; url="https://maven.nucleoid.xyz" }
+        maven { name="Sonatype Snapshots"; url="https://oss.sonatype.org/content/repositories/snapshots" }
+    }
 }
 
 archivesBaseName = "LibMultiPart"
@@ -45,7 +58,32 @@ dependencies {
     // Compat dependencies
     if (wthit_enabled.toBoolean()) {
         modCompileOnly "mcp.mobius.waila:wthit-api:fabric-$wthit_version"
-        modLocalRuntime "mcp.mobius.waila:wthit:fabric-$wthit_version"
+    }
+
+    if (jade_enabled.toBoolean()) {
+        modCompileOnly "maven.modrinth:jade:$jade_version"
+    }
+
+    if (polydex_enabled.toBoolean()) {
+        modCompileOnly "maven.modrinth:polydex:$polydex_version"
+    }
+
+    switch (waila_impl) {
+        case "wthit":
+            modLocalRuntime "mcp.mobius.waila:wthit:fabric-$wthit_version"
+            break
+        case "jade":
+            modLocalRuntime "maven.modrinth:jade:$jade_version"
+            break
+        case "polydex":
+            modLocalRuntime "maven.modrinth:polydex:$polydex_version"
+            modLocalRuntime "eu.pb4:sgui:$sgui_version"
+            modLocalRuntime "eu.pb4:placeholder-api:$placeholder_version"
+            modLocalRuntime "eu.pb4:player-data-api:$player_data_version"
+            modLocalRuntime "eu.pb4:sidebar-api:$sidebar_version"
+            modLocalRuntime "xyz.nucleoid:server-translations-api:$stapi_version"
+            modLocalRuntime "me.lucko:fabric-permissions-api:$permissions_version"
+            break
     }
 
     // Misc
@@ -62,6 +100,12 @@ sourceSets {
             // Compat code
             if (!wthit_enabled.toBoolean()) {
                 exclude "**/alexiil/mc/lib/multipart/compat/waila/**"
+            }
+            if (!jade_enabled.toBoolean()) {
+                exclude "**/alexiil/mc/lib/multipart/compat/jade/**"
+            }
+            if (!polydex_enabled.toBoolean()) {
+                exclude "**/alexiil/mc/lib/multipart/compat/polydex/impl/**"
             }
         }
         resources {
